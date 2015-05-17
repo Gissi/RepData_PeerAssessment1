@@ -1,25 +1,193 @@
 ---
-title: "Reproducible Research: Peer Assessment 1"
-output: 
-  html_document:
-    keep_md: true
+title: "Reproducible_Research_Cp1"
+author: "Gissur Jonasson"
+date: "15. maí 2015"
+output: html_document
 ---
 
+This is an R Markdown document explaining and finishing course project 1 of the data science specialization course Reproducible research.  
 
-## Loading and preprocessing the data
+The code of the project splits into 5 main parts i.e. 
 
-
-
-## What is mean total number of steps taken per day?
-
-
-
-## What is the average daily activity pattern?
-
-
-
-## Imputing missing values
+1. Load libraries getting and cleaning data 
+2. Analyze mean total numbers of steps per day 
+3. Analyze average daily activity pattern
+4. Manupulating the data for missing values
+5. Compare results with missing data to the one with filled in data. 
 
 
 
-## Are there differences in activity patterns between weekdays and weekends?
+First we start by data cleaning and loading libraries needed.
+------------------
+
+You can download the data file from
+[here]("https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2Factivity.zip")
+into your working directory if wanted.
+
+**Install packages sentences are commented out in the first code chunk.  
+If you are missing below packages you need to install them.**
+
+
+```{r initial, echo = TRUE, comment="#", message=FALSE, include=FALSE}
+options(scipen=999)
+
+```
+
+```{r getting_and_cleaning_data, echo = TRUE, comment="#", message=FALSE }
+
+#install.packages("sqldf")
+#install.packages("timeDate")
+#install.packages("lattice")
+download.file("http://d396qusza40orc.cloudfront.net/repdata%2Fdata%2Factivity.zip", "activity.zip")
+library("sqldf")
+library("timeDate")
+library("lattice") 
+tmpdir=unzip("activity.zip")
+amd <- read.csv("./activity.csv")
+amd$interval <- sprintf("%04d", amd$interval) 
+
+```
+
+
+Know we address point 2 - mean total numbers of steps per day 
+------------------
+
+```{r, echo = TRUE, comment="#", message=FALSE }
+#number of measured dates
+all_Dates <- sqldf("select distinct date from amd")
+num_dates_measured <- dim(all_Dates)[1]
+
+######
+##Find total steps every day ignoring missing values 
+tot_step_day <- sqldf("select sum(steps) as steps, date from amd where steps is not null group by date")
+
+
+mean_step <- mean(tot_step_day$steps)
+median_step <- median(tot_step_day$steps)
+
+```
+
+The number of dates measured is `r num_dates_measured` and the average steps and median steps per day are `r round(mean_step,0)` and `r median_step`
+
+*lets take a quick look at total steps per day in table format* 
+
+```{r, echo = TRUE, comment="#", message=FALSE }
+tot_step_day[,c(2,1)]
+
+```
+
+*Now visiually with histogram* 
+
+```{r, echo = TRUE, comment="#", message=FALSE }
+
+
+
+
+##plot the histogram
+hist(tot_step_day$steps, breaks = 20, xlab = "# Total steps", ylab = "# of days", 
+     main = "Histogram of Steps taken per day")
+abline(v=mean_step,col="red", lwd = 4)
+
+```
+
+
+Know we address point 3 -  average daily activity
+------------------
+
+```{r, echo = TRUE, comment="#" }
+avg_step_interval <- sqldf("select avg(steps) as avg_int_steps, interval from amd where steps is not null group by interval")
+
+plot(avg_step_interval$interval,avg_step_interval$avg_int_steps, type="b", lwd = 1,pch = 20,
+     xlab = "5 min time interval from 00:00 to 23:55", ylab = "Total steps", main = "average # of steps per 5 min over 2 months")
+##put grid on for the fun.
+grid(5, 10, lwd = 2)
+
+##Find the max steps taken interval 
+
+indexmax <- which.max(avg_step_interval$avg_int_steps)
+max_steps_interval<-avg_step_interval[indexmax,]
+
+max_steps_interval
+
+
+```
+
+Know we address point 4 -  Manupulating the data for missing values and compare it to original data
+------------------
+
+```{r, echo = TRUE, comment="#" }
+
+##Analyze missing data
+
+tot_miss_values <- sqldf("select count(*) as tot_missing_Values from amd where steps is null")
+
+all_date_no_Na <- sqldf("select distinct date from amd where steps is not null")
+num_dates_no_na <- dim(all_date_no_Na)[1]
+
+dates_with_null <- sqldf("select distinct date from amd where steps is null")
+num_dates_na <- dim(dates_with_null)[1]
+
+dates_with_null_count <- sqldf("select date ,count(*) from amd where steps is null group by date")
+
+##seems to be 8 days where there are null measures and all time intervals are null there
+
+## reconstruct the dataset by filling in missing dates by average of other days interval round to nearest step 
+
+data_Set_rc <- sqldf("select a.date,a.interval,a.steps,ai.avg_int_steps, case when a.steps is null then round(ai.avg_int_steps,0) else a.steps end steps_com
+                     from amd a left join avg_step_interval ai on a.interval = ai.interval")
+
+##look at part of the results 
+data_Set_rc[data_Set_rc$interval == 1545,]
+
+tot_step_day_rc <- sqldf("select sum(steps_com) as steps, date from data_Set_rc group by date")
+
+mean_step_rcd <- mean(tot_step_day_rc$steps)
+mean_step_rcd
+
+median_step_rcd <- median(tot_step_day_rc$steps)
+median_step_rcd
+
+##plot a histogram of the new dataset
+hist(tot_step_day_rc$steps, breaks = 20, xlab = "Number of days", ylab = "Total steps", 
+     main = "Histogram of Steps taken per day")
+abline(v=mean_step,col="red", lwd = 1)
+
+##steps difference in mean and median in reconstructed data and normal data
+
+mean_dif <- mean_step_rcd - mean_step
+mean_dif
+median_dif <- median_step_rcd - median_step
+median_dif
+
+## total impact on the data
+
+total_impact_steps <- sum(tot_step_day_rc$steps) -  sum(tot_step_day$steps)
+total_impact_steps
+```
+
+
+
+Know we address point 5 - creating factor variables and makeing panel plot
+------------------
+
+```{r, echo = TRUE, comment="#" }
+
+tim_int <- sqldf("select interval ,count(*) from amd where steps is null group by interval")
+
+data_Set_rc$day<-factor(weekdays(as.Date(data_Set_rc$date)))
+
+data_Set_rc$is_weekday<-factor(isWeekday(as.Date(data_Set_rc$date)),levels=c(TRUE,FALSE),labels=c("Weekdays","Weekends"))
+
+day_data <- sqldf("select day,interval,avg(steps_com) as steps from data_Set_rc group by day,interval")
+
+weekend_week_data <- sqldf("select is_weekday,interval,avg(steps_com) as steps from data_Set_rc group by is_weekday,interval")
+
+#look at part of new dataset
+weekend_week_data[260:300,]
+
+#Plot the panel plot
+
+xyplot(steps~as.numeric(interval) | is_weekday, data=weekend_week_data,layout = c(1,2),type="b", lwd = 1,pch = 20,
+       xlab = "5 min time interval from 00:00 to 23:55", ylab = "Total number of steps", main = "weekend vs weekdays activity")
+
+```
