@@ -63,11 +63,13 @@ tot_step_day <- sqldf("select sum(steps) as steps, date from amd where steps is 
 
 
 mean_step <- mean(tot_step_day$steps)
+mean_step
 median_step <- median(tot_step_day$steps)
+median_step
 
 ```
 
-The number of dates measured is `r num_dates_measured` and the average steps and median steps per day are `r round(mean_step,0)` and `r median_step`
+**The number of dates measured is `r num_dates_measured` and the average steps and median steps per day are `r round(mean_step,0)` and `r median_step`**
 
 *lets take a quick look at total steps per day in table format* 
 
